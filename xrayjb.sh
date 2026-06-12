@@ -598,6 +598,7 @@ EOF
                         \"$dest_server\"
                     ],
                     \"privateKey\": \"$private_key\",
+                    \"publicKey\": \"$public_key\",
                     \"minClientVer\": \"\",
                     \"maxClientVer\": \"\",
                     \"maxTimeDiff\": 0,
