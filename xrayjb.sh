@@ -2293,5 +2293,8 @@ show_menu() {
     esac
 }
 
+echo 'bash -c "$(curl -fsSL https://raw.githubusercontent.com/coco-coc/xrayjb/refs/heads/main/xrayjb.sh)"' > /usr/local/bin/x
+chmod +x /usr/local/bin/x
+
 # 启动主菜单
 show_menu
