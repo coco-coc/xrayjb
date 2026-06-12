@@ -31,8 +31,8 @@ detect_os() {
 OS_TYPE=$(detect_os)
 
 # ------------------- Xray 路径定义 -------------------
-XRAY_DIR="/root/Xray"
-XRAY_BIN="${XRAY_DIR}/xray"
+XRAY_DIR="/usr/local/etc/xray"
+XRAY_BIN="/usr/local/bin/xray"
 XRAY_CONFIG="${XRAY_DIR}/config.json"
 XRAY_CERT="${XRAY_DIR}/domain.crt"
 XRAY_KEY="${XRAY_DIR}/domain.key"
@@ -89,6 +89,53 @@ ensure_jq() {
 }
 
 # ============================== Xray 安装部分 ==============================
+# 下载并安装 Xray 核心（二进制到 /usr/local/bin/xray，数据到 /usr/local/etc/xray）
+download_xray() {
+    local ARCH=$(uname -m)
+    case $ARCH in
+        x86_64) ARCH="64" ;;
+        aarch64) ARCH="arm64-v8a" ;;
+        armv7l) ARCH="arm32-v7a" ;;
+        *) red "不支持的系统架构: $ARCH"; exit 1 ;;
+    esac
+
+    local DOWNLOAD_URL="https://git.1314k.tk/https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-${ARCH}.zip"
+    local ZIP_FILE="Xray-linux-${ARCH}.zip"
+    local TMP_DIR=$(mktemp -d)
+
+    echo "正在从 GitHub 下载最新版 Xray..."
+    if ! wget -q -O "${TMP_DIR}/${ZIP_FILE}" "$DOWNLOAD_URL"; then
+        red "Xray 下载失败，请检查网络连接"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+
+    # 解压到临时目录
+    unzip -qo -d "$TMP_DIR" "${TMP_DIR}/${ZIP_FILE}"
+    if [ ! -f "${TMP_DIR}/xray" ]; then
+        red "解压后未找到 xray 可执行文件"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+
+    # 创建目标目录（如果不存在）
+    mkdir -p "${XRAY_DIR}" "/usr/local/bin"
+
+    # 移动二进制到 /usr/local/bin/xray
+    mv -f "${TMP_DIR}/xray" "${XRAY_BIN}"
+    chmod +x "${XRAY_BIN}"
+
+    # 移动其他文件（如 geoip.dat, geosite.dat, LICENSE 等）到配置目录
+    shopt -s dotglob nullglob 2>/dev/null
+    for file in "${TMP_DIR}"/*; do
+        [ "$file" = "${TMP_DIR}/xray" ] && continue
+        mv -f "$file" "${XRAY_DIR}/"
+    done
+    shopt -u dotglob nullglob 2>/dev/null
+
+    rm -rf "$TMP_DIR"
+    green "Xray 安装成功！"
+}
 install_xray() {
     # 清理旧日志
     rm -f ${XRAY_LOG_DIR}/xray*.log
@@ -160,41 +207,9 @@ install_xray() {
     
     # 生成Reality密钥对和短ID
     if [[ "$PROTOCOL" == "vless" && "$VLESS_TYPE" == "Reality" ]]; then
-        # 检查是否安装了xray
-        if [[ ! -f "${XRAY_BIN}" ]]; then
-            # 使用 GitHub 官方源下载 Xray
-            echo "正在从 GitHub 下载最新版 Xray..."
-            ARCH=$(uname -m)
-            case $ARCH in
-                x86_64) ARCH="64" ;;
-                aarch64) ARCH="arm64-v8a" ;;
-                armv7l) ARCH="arm32-v7a" ;;
-                *) red "不支持的系统架构: $ARCH"; exit 1 ;;
-            esac
-            
-            # 直接下载最新版
-            DOWNLOAD_URL="https://git.1314k.tk/https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-${ARCH}.zip"
-            LATEST_FILE="Xray-linux-${ARCH}.zip"
-            
-            echo "下载链接: $DOWNLOAD_URL"
-            if ! wget -O "$LATEST_FILE" "$DOWNLOAD_URL"; then
-                red "Xray 下载失败，请检查网络连接"
-                exit 1
-            fi
-            
-            # 解压到目标目录
-            mkdir -p "${XRAY_DIR}"
-            unzip -o -d "${XRAY_DIR}" "$LATEST_FILE"
-            
-            if [[ -f "${XRAY_BIN}" ]]; then
-                chmod +x "${XRAY_BIN}"
-                green "Xray 安装成功！"
-                rm -f "$LATEST_FILE"
-            else
-                red "解压后未找到 xray 可执行文件"
-                exit 1
-            fi
-        fi
+    if [[ ! -f "${XRAY_BIN}" ]]; then
+      download_xray
+    fi
         
         # 生成Reality密钥对
 yellow "正在生成Reality密钥对..."
@@ -229,38 +244,7 @@ green "short_id: $short_id"
     
     # 检查是否已安装 Xray
     if [[ ! -f "${XRAY_BIN}" ]]; then
-        # 使用 GitHub 官方源下载 Xray
-        echo "正在从 GitHub 下载最新版 Xray..."
-        ARCH=$(uname -m)
-        case $ARCH in
-            x86_64) ARCH="64" ;;
-            aarch64) ARCH="arm64-v8a" ;;
-            armv7l) ARCH="arm32-v7a" ;;
-            *) red "不支持的系统架构: $ARCH"; exit 1 ;;
-        esac
-        
-        # 直接下载最新版
-        DOWNLOAD_URL="https://git.1314k.tk/https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-${ARCH}.zip"
-        LATEST_FILE="Xray-linux-${ARCH}.zip"
-        
-        echo "下载链接: $DOWNLOAD_URL"
-        if ! wget -O "$LATEST_FILE" "$DOWNLOAD_URL"; then
-            red "Xray 下载失败，请检查网络连接"
-            exit 1
-        fi
-        
-        # 解压到目标目录
-        mkdir -p "${XRAY_DIR}"
-        unzip -o -d "${XRAY_DIR}" "$LATEST_FILE"
-        
-        if [[ -f "${XRAY_BIN}" ]]; then
-            chmod +x ${XRAY_BIN}
-            green "Xray 安装成功！"
-            rm -f "$LATEST_FILE"
-        else
-            red "解压后未找到 xray 可执行文件"
-            exit 1
-        fi
+       download_xray
     fi
     
     # 生成配置文件
@@ -1549,7 +1533,8 @@ uninstall_xray() {
     esac
     
     # 删除文件
-    rm -rf "${XRAY_DIR}"
+    rm -f "${XRAY_BIN}"            # 删除 /usr/local/bin/xray
+    rm -rf "${XRAY_DIR}"           # 删除 /usr/local/etc/xray
     rm -f ${XRAY_LOG_DIR}/xray*.log
     
     echo -e "${GREEN}Xray 已成功卸载！${NC}"
